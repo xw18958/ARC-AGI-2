@@ -10,17 +10,24 @@ from .episodes import validation_cases
 from .metrics import ValidationRecord, choose_attempts, solved_by_attempts, summarize_validation
 
 
-def _load_model(model_name: str, checkpoint: str | None):
+def _load_model(model_cfg: dict, checkpoint: str | None):
     import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    tokenizer = AutoTokenizer.from_pretrained(model_name, padding_side="left")
+    model_name = model_cfg["name_or_path"]
+    trust_remote_code = bool(model_cfg.get("trust_remote_code", False))
+    tokenizer = AutoTokenizer.from_pretrained(
+        model_name,
+        padding_side="left",
+        trust_remote_code=trust_remote_code,
+    )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
         device_map="auto",
+        trust_remote_code=trust_remote_code,
     )
     if checkpoint:
         from peft import PeftModel
@@ -35,7 +42,14 @@ def _batched(items: list[dict], batch_size: int):
         yield items[i : i + batch_size]
 
 
-def _generate_batch(model, tokenizer, cases: list[dict], cfg: dict) -> list[list[str]]:
+def _generate_batch(
+    model,
+    tokenizer,
+    cases: list[dict],
+    cfg: dict,
+    *,
+    enable_thinking: bool,
+) -> list[list[str]]:
     import torch
 
     rendered = [
@@ -43,7 +57,7 @@ def _generate_batch(model, tokenizer, cases: list[dict], cfg: dict) -> list[list
             case["prompt"],
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=True,
+            enable_thinking=enable_thinking,
         )
         for case in cases
     ]
@@ -63,10 +77,9 @@ def _generate_batch(model, tokenizer, cases: list[dict], cfg: dict) -> list[list
         )
     prompt_len = encoded["input_ids"].shape[1]
     decoded = tokenizer.batch_decode(outputs[:, prompt_len:], skip_special_tokens=True)
-    grouped = [
+    return [
         decoded[i * num_candidates : (i + 1) * num_candidates] for i in range(len(cases))
     ]
-    return grouped
 
 
 def main() -> None:
@@ -82,14 +95,23 @@ def main() -> None:
 
     set_seed(int(cfg.get("seed", 42)))
     bundle = load_bundle(args.data)
-    cases = validation_cases(bundle.evaluation)
-    model, tokenizer = _load_model(cfg["model"]["name_or_path"], args.checkpoint)
     val_cfg = cfg["validation"]
+    if not bool(val_cfg.get("fixed_prefix", True)):
+        raise ValueError("Only the fixed cumulative-prefix validation protocol is implemented.")
+    cases = validation_cases(bundle.evaluation)
+    model, tokenizer = _load_model(cfg["model"], args.checkpoint)
+    enable_thinking = bool(cfg["model"].get("enable_thinking", True))
     records: list[ValidationRecord] = []
     details: list[dict] = []
 
     for batch in _batched(cases, int(val_cfg["batch_size"])):
-        candidate_groups = _generate_batch(model, tokenizer, batch, val_cfg)
+        candidate_groups = _generate_batch(
+            model,
+            tokenizer,
+            batch,
+            val_cfg,
+            enable_thinking=enable_thinking,
+        )
         for case, candidates in zip(batch, candidate_groups):
             attempts = choose_attempts(candidates, int(val_cfg.get("num_attempts", 2)))
             solved = solved_by_attempts(attempts, case["ground_truth"])
