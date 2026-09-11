@@ -59,8 +59,8 @@ def main() -> None:
             "must be divisible by num_generations."
         )
 
-    # IterableDataset requires max_steps. One logical epoch means visiting every
-    # (task, target, shot-count) spec once; supports are freshly sampled on each cycle.
+    # TRL repeats each unique prompt num_generations times inside the effective batch.
+    # Thus this is the number of unique ARC episode specifications consumed per optimizer step.
     prompts_per_optimizer_step = max(1, global_effective_batch // num_generations)
     max_steps = math.ceil(
         logical_episodes * int(t.get("logical_epochs", 1)) / prompts_per_optimizer_step
@@ -86,6 +86,7 @@ def main() -> None:
         report_to=t.get("report_to", "none"),
         seed=seed,
         remove_unused_columns=False,
+        trust_remote_code=bool(cfg["model"].get("trust_remote_code", False)),
         num_generations=num_generations,
         max_completion_length=int(g["max_completion_length"]),
         temperature=float(g.get("temperature", 0.6)),
@@ -94,7 +95,9 @@ def main() -> None:
         min_p=float(g.get("min_p", 0.0)),
         beta=float(g.get("beta", 0.0)),
         loss_type=g.get("loss_type", "dapo"),
+        shuffle_dataset=bool(g.get("shuffle_dataset", False)),
         log_completions=bool(g.get("log_completions", True)),
+        num_completions_to_print=int(g.get("num_completions_to_print", 2)),
         chat_template_kwargs={"enable_thinking": bool(cfg["model"].get("enable_thinking", True))},
         use_vllm=bool(v.get("enabled", False)),
         vllm_mode=v.get("mode", "colocate"),
