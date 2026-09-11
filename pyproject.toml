@@ -4,22 +4,22 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arcagi2-qwen-grpo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Qwen3-8B + LoRA + GRPO pipeline for ARC Prize 2026 ARC-AGI-2"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "torch>=2.4",
-  "transformers>=4.51",
-  "datasets>=3.0",
-  "trl>=0.25",
+  "transformers>=4.56.2",
+  "datasets>=4.7.0",
+  "trl>=1.9.0,<2.0",
   "peft>=0.17",
-  "accelerate>=1.2",
+  "accelerate>=1.4.0",
   "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-vllm = ["vllm>=0.8"]
+vllm = ["vllm>=0.19.1,<0.29"]
 wandb = ["wandb>=0.19"]
 dev = ["pytest>=8", "ruff>=0.9"]
 
