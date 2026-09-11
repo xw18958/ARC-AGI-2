@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "arcagi2-qwen-grpo"
-version = "0.1.1"
+version = "0.1.2"
 description = "Qwen3-8B + LoRA + GRPO pipeline for ARC Prize 2026 ARC-AGI-2"
 readme = "README.md"
 requires-python = ">=3.10"
