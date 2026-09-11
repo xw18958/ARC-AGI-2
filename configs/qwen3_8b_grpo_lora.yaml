@@ -1,0 +1,62 @@
+seed: 42
+
+model:
+  name_or_path: Qwen/Qwen3-8B
+  trust_remote_code: false
+  enable_thinking: true
+
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.0
+  target_modules: all-linear
+  bias: none
+
+training:
+  output_dir: outputs/qwen3_8b_grpo_lora
+  logical_epochs: 1
+  # Optional smoke-test override. Leave null to guarantee a complete logical cycle.
+  max_steps_override: null
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 8
+  learning_rate: 1.0e-6
+  warmup_ratio: 0.03
+  weight_decay: 0.0
+  max_grad_norm: 1.0
+  bf16: true
+  gradient_checkpointing: true
+  logging_steps: 10
+  save_steps: 100
+  save_total_limit: 3
+  report_to: none
+  resume_from_checkpoint: null
+
+# GRPO samples a group of reasoning traces for each prompt, then compares their rewards.
+grpo:
+  num_generations: 8
+  max_completion_length: 4096
+  temperature: 0.6
+  top_p: 0.95
+  top_k: 20
+  min_p: 0.0
+  beta: 0.0
+  loss_type: dapo
+  log_completions: true
+
+# Optional generation acceleration. For multi-GPU jobs, server mode can place rollout
+# generation on dedicated GPU(s); colocate mode shares the training GPU(s).
+vllm:
+  enabled: false
+  mode: colocate
+  gpu_memory_utilization: 0.30
+
+validation:
+  batch_size: 4
+  num_candidates: 4
+  num_attempts: 2
+  max_new_tokens: 4096
+  temperature: 0.6
+  top_p: 0.95
+  top_k: 20
+  # Validation is fixed: prefixes are A, A+B, A+B+C, ... in original order.
+  fixed_prefix: true

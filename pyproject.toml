@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arcagi2-qwen-grpo"
+version = "0.1.0"
+description = "Qwen3-8B + LoRA + GRPO pipeline for ARC Prize 2026 ARC-AGI-2"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.4",
+  "transformers>=4.51",
+  "datasets>=3.0",
+  "trl>=0.25",
+  "peft>=0.17",
+  "accelerate>=1.2",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+vllm = ["vllm>=0.8"]
+wandb = ["wandb>=0.19"]
+dev = ["pytest>=8", "ruff>=0.9"]
+
+[project.scripts]
+arc-train = "arcagi2.train:main"
+arc-validate = "arcagi2.validate:main"
+arc-stats = "arcagi2.inspect_data:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
