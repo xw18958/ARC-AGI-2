@@ -41,7 +41,11 @@ grpo:
   min_p: 0.0
   beta: 0.0
   loss_type: dapo
+  # The episode stream already performs a deterministic per-cycle shuffle. Keep TRL's
+  # extra iterable-dataset shuffle off so one logical cycle really covers every spec once.
+  shuffle_dataset: false
   log_completions: true
+  num_completions_to_print: 2
 
 # Optional generation acceleration. For multi-GPU jobs, server mode can place rollout
 # generation on dedicated GPU(s); colocate mode shares the training GPU(s).
