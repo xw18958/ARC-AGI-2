@@ -7,16 +7,21 @@ import os
 from .config import load_config
 from .data import load_bundle
 from .episodes import episode_count, training_row_stream
-from .rewards import exact_grid_reward
+from .rewards import answer_format_reward, exact_grid_reward, grid_progress_reward
 
 
-def _make_dataset(tasks, seed: int):
+def _make_dataset(tasks, seed: int, augmentation_cfg: dict):
     from datasets import IterableDataset
 
-    # Streaming keeps augmentation on-the-fly and avoids materializing all support subsets.
+    # Streaming keeps augmentation on-the-fly and avoids materializing support subsets.
     return IterableDataset.from_generator(
         training_row_stream,
-        gen_kwargs={"tasks": tasks, "seed": seed},
+        gen_kwargs={
+            "tasks": tasks,
+            "seed": seed,
+            "curriculum": augmentation_cfg.get("shot_curriculum", "high_to_low_evidence"),
+            "curriculum_cycles": int(augmentation_cfg.get("curriculum_cycles", 1)),
+        },
     )
 
 
@@ -29,7 +34,7 @@ def main() -> None:
     cfg = load_config(args.config)
     bundle = load_bundle(args.data)
     seed = int(cfg.get("seed", 42))
-    train_dataset = _make_dataset(bundle.train, seed)
+    train_dataset = _make_dataset(bundle.train, seed, cfg["augmentation"])
     logical_episodes = episode_count(bundle.train)
 
     from peft import LoraConfig
@@ -47,6 +52,7 @@ def main() -> None:
 
     t = cfg["training"]
     g = cfg["grpo"]
+    r = cfg["rewards"]
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
     per_device_effective_batch = (
         int(t["per_device_train_batch_size"]) * int(t["gradient_accumulation_steps"])
@@ -67,6 +73,18 @@ def main() -> None:
     )
     if t.get("max_steps_override") is not None:
         max_steps = int(t["max_steps_override"])
+
+    reward_funcs = [exact_grid_reward, grid_progress_reward, answer_format_reward]
+    reward_weights = [
+        float(r["exact_weight"]),
+        float(r["progress_weight"]),
+        float(r["format_weight"]),
+    ]
+    if reward_weights[0] <= sum(max(0.0, w) for w in reward_weights[1:]):
+        raise ValueError(
+            "Exact correctness must remain dominant: exact_weight must exceed the sum of "
+            "all auxiliary reward weights."
+        )
 
     v = cfg.get("vllm", {})
     training_args = GRPOConfig(
@@ -95,7 +113,9 @@ def main() -> None:
         min_p=float(g.get("min_p", 0.0)),
         beta=float(g.get("beta", 0.0)),
         loss_type=g.get("loss_type", "dapo"),
+        mask_truncated_completions=bool(g.get("mask_truncated_completions", True)),
         scale_rewards=g.get("scale_rewards", False),
+        reward_weights=reward_weights,
         shuffle_dataset=bool(g.get("shuffle_dataset", False)),
         log_completions=bool(g.get("log_completions", True)),
         num_completions_to_print=int(g.get("num_completions_to_print", 2)),
@@ -109,7 +129,7 @@ def main() -> None:
         model=cfg["model"]["name_or_path"],
         args=training_args,
         train_dataset=train_dataset,
-        reward_funcs=exact_grid_reward,
+        reward_funcs=reward_funcs,
         peft_config=peft_config,
     )
     trainer.train(resume_from_checkpoint=t.get("resume_from_checkpoint") or None)
