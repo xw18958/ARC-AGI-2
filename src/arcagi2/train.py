@@ -95,6 +95,7 @@ def main() -> None:
         min_p=float(g.get("min_p", 0.0)),
         beta=float(g.get("beta", 0.0)),
         loss_type=g.get("loss_type", "dapo"),
+        scale_rewards=g.get("scale_rewards", False),
         shuffle_dataset=bool(g.get("shuffle_dataset", False)),
         log_completions=bool(g.get("log_completions", True)),
         num_completions_to_print=int(g.get("num_completions_to_print", 2)),
