@@ -16,6 +16,8 @@ _REQUIRED_GRPO_FIELDS = {
     "scale_rewards",
     "shuffle_dataset",
     "chat_template_kwargs",
+    "reward_weights",
+    "mask_truncated_completions",
 }
 
 
@@ -66,6 +68,15 @@ def main() -> None:
     if missing:
         raise RuntimeError(f"Installed TRL GRPOConfig is missing required fields: {missing}")
 
+    rewards = cfg["rewards"]
+    reward_weights = [
+        float(rewards["exact_weight"]),
+        float(rewards["progress_weight"]),
+        float(rewards["format_weight"]),
+    ]
+    if reward_weights[0] <= sum(max(0.0, w) for w in reward_weights[1:]):
+        raise RuntimeError("Exact reward is not dominant over auxiliary shaping rewards")
+
     model_cfg = cfg["model"]
     model_name = model_cfg["name_or_path"]
     trust_remote_code = bool(model_cfg.get("trust_remote_code", False))
@@ -106,11 +117,23 @@ def main() -> None:
             "context_tokens": context,
             "enable_thinking": enable_thinking,
         },
+        "augmentation": cfg["augmentation"],
+        "rewards": {
+            "weights": {
+                "exact": reward_weights[0],
+                "progress": reward_weights[1],
+                "format": reward_weights[2],
+            },
+            "exact_is_dominant": True,
+        },
         "training": {
             "logical_episode_specs": logical_episodes,
             "rollouts_per_logical_cycle": logical_episodes * num_generations,
             "num_generations": num_generations,
             "max_completion_length": completion,
+            "mask_truncated_completions": bool(
+                cfg["grpo"].get("mask_truncated_completions", True)
+            ),
             "max_full_shot_prompt": train_prompt_stats,
         },
         "validation": {
