@@ -2,26 +2,30 @@
 
 ## 1. Experimental contract
 
-The repository intentionally separates the three roles in the supplied ARC Prize package:
+The supplied ARC Prize package has three separate roles:
 
-- **Training:** the 1,000 `arc-agi_training_*` tasks.
-- **Validation:** the 120 `arc-agi_evaluation_*` tasks. Their solutions are used only for scoring; no gradient update uses them.
-- **Local `test_challenges.json`:** not used for training or validation. Kaggle supplies hidden test tasks when the notebook is rerun for scoring.
+- **Training:** 1,000 `arc-agi_training_*` tasks.
+- **Validation:** 120 `arc-agi_evaluation_*` tasks. Their solutions are used only for scoring; no gradient update uses them.
+- **Local `test_challenges.json`:** excluded from development because the supplied 240 tasks duplicate training tasks; Kaggle substitutes hidden tasks for scoring.
 
-The model is **Qwen3-8B**, adapted with **LoRA** and **GRPO**. Qwen generates its own reasoning; no labelled chain-of-thought dataset is required. GRPO receives a binary reward of 1 only when the parsed final grid exactly matches the target grid.
+The model is **Qwen3-8B**, adapted with **LoRA + GRPO**. Qwen generates its own reasoning. No labelled chain-of-thought dataset is required.
 
 ## 2. Training augmentation
 
-For every training task, combine its labelled demonstrations with its labelled original test pair(s). If the task contains `M` known pairs:
+For every training task, combine its labelled demonstrations with its labelled original test pair(s). If a task contains `M` known pairs:
 
 1. Every pair becomes the target/query once.
 2. For each target, cover every shot count `k = 1, ..., M-1`.
-3. At access time, sample `k` supports from the other `M-1` pairs and randomly shuffle their order.
-4. On the next logical cycle, re-sample the supports/order.
+3. At access time, randomly sample `k` supports from the remaining pairs and shuffle their order.
+4. On later logical cycles, re-sample support identities/order.
 
-Therefore one logical augmentation cycle contains exactly `M(M-1)` episode specifications per task while avoiding materializing every support subset/permutation. This is analogous to image augmentation: the underlying task is stored once and transformed when used.
+One logical cycle therefore contains exactly `M(M-1)` target×shot episode specifications per task without materializing every support subset/permutation.
 
-The training stream is infinite and cycles through all specifications. TRL receives a bounded `max_steps`, derived from the requested number of logical augmentation epochs. The default is one complete logical cycle; an explicit `max_steps_override` exists only for smoke tests.
+### Initial evidence curriculum
+
+Coverage never changes. During the configured initial cycle(s), specifications are ordered by the fraction of available demonstrations shown, from high evidence to low evidence. After those cycles the specification order is fully shuffled.
+
+This is **not** an assumption that tasks with more demonstrations are easier. It is only a bootstrap ordering within the variable-shot training distribution.
 
 ## 3. Prompt/answer contract
 
@@ -29,32 +33,42 @@ Each episode contains:
 
 - a system instruction defining ARC grid rules and strict output format;
 - `k` solved input-output demonstrations;
-- one query grid whose answer is hidden from the model.
+- one query grid whose output is hidden from the model.
 
-Qwen3 thinking mode remains enabled. The model may emit `<think>...</think>`, but its final grid must be in:
+Qwen3 thinking mode remains enabled. The model can generate its native `<think>...</think>` trajectory and must place the final grid in:
 
 ```text
 <answer>[[...], [...]]</answer>
 ```
 
-The parser accepts only rectangular grids up to 30x30 containing integer values 0-9.
+The parser accepts only rectangular grids up to 30×30 with integer values 0–9.
 
-## 4. GRPO + LoRA
+## 4. Training better reasoning with GRPO
 
-TRL's `GRPOTrainer` is used rather than a custom reinforcement-learning loop.
+GRPO samples multiple complete Qwen reasoning trajectories for each ARC episode. Reward is computed from the final output, but the policy update applies to the generated trajectory, including its reasoning tokens. This lets Qwen improve its own CoT without a teacher rationale.
 
-- LoRA keeps the base Qwen3-8B weights frozen.
-- Each prompt produces a group of sampled reasoning completions.
-- Reward is binary exact-grid correctness.
-- The default config uses TRL's current `dapo` loss normalization to avoid the response-length bias of the original GRPO loss.
-- Qwen3's recommended thinking-mode sampling defaults (`temperature=0.6`, `top_p=0.95`, `top_k=20`) are used as initial values.
-- vLLM rollout generation can be enabled in config without changing data or reward code.
+The default reward is verifiable and hierarchical:
 
-No partial correctness reward is enabled in the baseline. This keeps the first experiment interpretable.
+- **Exact grid:** weight `1.00`, binary exact match.
+- **Grid progress:** weight `0.20`, zero for invalid/wrong-shape grids; otherwise a shape floor plus cell-level exact accuracy.
+- **Strict answer format:** weight `0.02`, requiring a parseable `<answer>` grid.
+
+Exact correctness is guaranteed to dominate all auxiliary rewards combined. The exact-only ablation is available by setting the two auxiliary weights to zero.
+
+We deliberately do not reward CoT length, wording, or unsupported reasoning-process heuristics. See [`REASONING_REFINEMENT.md`](REASONING_REFINEMENT.md).
+
+### GRPO stability settings
+
+- `scale_rewards: false` avoids standard-deviation-based question-difficulty reweighting.
+- `loss_type: dapo` avoids the original GRPO response-length normalization bias.
+- `mask_truncated_completions: true` excludes cut-off reasoning trajectories from the policy loss.
+- Default group size is 8 completions per prompt.
+- Qwen thinking-mode sampling begins at `temperature=0.6`, `top_p=0.95`, `top_k=20`.
+- Optional vLLM rollout generation changes execution speed, not experiment semantics.
 
 ## 5. Validation protocol
 
-Validation is deterministic in its **task construction**. For each of the 120 evaluation tasks, retain the original demonstration order and original test query(s):
+Validation is fixed and unaffected by training augmentation/curriculum. For every one of the 120 evaluation tasks, retain the original demonstration order and original test query(s):
 
 ```text
 1-shot: A         -> original test query
@@ -63,41 +77,47 @@ Validation is deterministic in its **task construction**. For each of the 120 ev
 ...
 ```
 
-For each condition the inference pipeline samples several completions, parses their final grids, groups identical grids, and selects the two most frequently generated **distinct** grids as the two competition attempts.
+For each condition, inference samples multiple completions, parses their final grids, groups identical grids, and selects the two most frequent **distinct** grids as the two competition attempts.
 
 ### Shot-efficiency score
 
-For a task and shot count, first average correctness across that task's original test queries. Then average across all available shot counts for that task. Finally macro-average the resulting task scores across the 120 tasks.
+For each task:
 
-This means a task with 2 available shots and a task with 6 available shots each contribute exactly one equally weighted task score.
+1. average correctness across its original test queries at each shot level;
+2. average those shot-level scores across all available shots;
+3. macro-average the resulting task scores over all 120 tasks.
 
-The validator also reports:
+Thus every validation task contributes equal final weight regardless of how many shots/test queries it contains.
+
+Also report:
 
 - per-shot task-macro accuracy;
-- full-original-shot two-attempt accuracy (competition-oriented diagnostic);
+- full-original-shot two-attempt exact-match accuracy;
 - per-case attempts for debugging.
 
-## 6. Scalability
+## 6. Scalability and reproducibility
 
-The pipeline is split into independent modules so scaling does not change experimental semantics:
+Modules remain independent:
 
-- `data.py`: ZIP/directory I/O and validation.
-- `episodes.py`: dynamic augmentation and fixed validation cases.
-- `prompts.py`: one prompt contract shared by training/validation.
-- `parsing.py`: one strict answer parser shared by reward/validation.
-- `rewards.py`: stateless exact-match reward for distributed GRPO.
-- `metrics.py`: aggregation independent of model execution.
-- `train.py`: TRL/PEFT orchestration; compatible with Accelerate and optional vLLM.
-- `validate.py`: batched inference; candidate voting is independent of batch size.
+- `data.py`: ZIP/directory loading and split integrity.
+- `episodes.py`: dynamic augmentation, curriculum ordering, fixed validation cases.
+- `prompts.py`: shared train/validation prompt contract.
+- `parsing.py`: strict grid extraction.
+- `rewards.py`: exact/progress/format rewards and sparse-reward diagnostics.
+- `metrics.py`: validation aggregation independent of inference execution.
+- `preflight.py`: tokenizer/context/TRL API check before loading 8B weights.
+- `train.py`: TRL/PEFT orchestration, Accelerate, optional vLLM.
+- `validate.py`: batched inference and candidate voting.
 
-Large generated artifacts, datasets, checkpoints and W&B runs are ignored by Git.
+The episode stream itself controls ordering, so TRL's extra iterable-dataset shuffle is disabled. Large datasets, checkpoints, generated outputs, and W&B runs are ignored by Git.
 
-## 7. Execution order
+## 7. Verification sequence
 
-1. Install the package: `pip install -e '.[dev]'` (add `vllm` or `wandb` extras if needed).
-2. Verify the dataset: `arc-stats --data /path/to/arc-prize-2026-arc-agi-2.zip`.
-3. Run unit tests: `pytest -q`.
-4. Smoke-test base Qwen validation on a small case subset if desired.
-5. Launch GRPO: `accelerate launch -m arcagi2.train --config configs/qwen3_8b_grpo_lora.yaml --data ...`.
-6. Validate a saved adapter: `arc-validate --data ... --checkpoint outputs/.../checkpoint-N`.
-7. Select checkpoints by **shot-efficiency score**; keep full-shot two-attempt accuracy as the competition-oriented secondary metric.
+1. `pip install -e '.[dev]'` (plus `vllm`/`wandb` extras if needed).
+2. `arc-stats --data DATA.zip` — verify 1,000 train / 120 eval, no train↔eval leakage, and expected episode counts.
+3. `pytest -q` — verify augmentation, curriculum coverage, parser, rewards, candidate voting, and metrics.
+4. `arc-preflight --config configs/qwen3_8b_grpo_lora.yaml --data DATA.zip` — verify installed TRL fields, tokenizer/context budget, reward config, and expected rollout counts.
+5. Run a short GRPO smoke test and inspect `arc_exact_grid`, `arc_progress`, `arc_parseable`, `arc_group_all_wrong`, and `arc_group_mixed`.
+6. Only then run a complete logical cycle.
+7. Validate saved adapters with the fixed cumulative-shot protocol.
+8. Select checkpoints by **shot-efficiency score**; use full-shot two-attempt accuracy as the competition-oriented secondary metric.
