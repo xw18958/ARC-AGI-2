@@ -4,7 +4,13 @@ import json
 from collections import defaultdict
 from typing import Any
 
-from .parsing import parse_grid
+from .parsing import ANSWER_RE, parse_grid
+from .types import Grid
+
+# A same-shape prediction has made meaningful ARC progress even if no cell is correct yet.
+# The remaining reward is proportional to exact cell accuracy. Exact correctness remains a
+# separate, dominant reward in GRPOConfig.
+_SHAPE_FLOOR = 0.25
 
 
 def _completion_text(completion: Any) -> str:
@@ -17,12 +23,26 @@ def _completion_text(completion: Any) -> str:
     return str(completion)
 
 
-def exact_grid_reward(completions, ground_truth, log_metric=None, **kwargs) -> list[float]:
-    """Binary ARC reward: 1 only for an exact final-grid match.
+def _same_shape(a: Grid, b: Grid) -> bool:
+    return len(a) == len(b) and len(a[0]) == len(b[0])
 
-    Besides the reward itself, log diagnostics that are important for binary-reward GRPO:
-    parseable output rate and the fractions of all-wrong/all-correct/mixed prompt groups.
-    A mixed group is the useful case for standard relative GRPO because it contains reward variance.
+
+def _cell_accuracy(predicted: Grid, truth: Grid) -> float:
+    correct = sum(
+        int(p == t)
+        for pred_row, truth_row in zip(predicted, truth)
+        for p, t in zip(pred_row, truth_row)
+    )
+    total = len(truth) * len(truth[0])
+    return correct / total
+
+
+def exact_grid_reward(completions, ground_truth, log_metric=None, **kwargs) -> list[float]:
+    """Primary ARC reward: 1 only for an exact final-grid match.
+
+    GRPO applies the resulting advantage to the complete generated trajectory, including the
+    model's self-generated thinking. Diagnostics expose how often groups contain useful outcome
+    variance versus all-wrong/all-correct rollouts.
     """
     predicted = [parse_grid(_completion_text(completion)) for completion in completions]
     truths = [json.loads(text) for text in ground_truth]
@@ -51,4 +71,41 @@ def exact_grid_reward(completions, ground_truth, log_metric=None, **kwargs) -> l
                 log_metric("arc_group_all_correct", all_correct)
                 log_metric("arc_group_mixed", mixed)
 
+    return rewards
+
+
+def grid_progress_reward(completions, ground_truth, log_metric=None, **kwargs) -> list[float]:
+    """Small dense, fully verifiable ARC progress reward in [0, 1].
+
+    Invalid or wrong-shape outputs receive 0. A correct-shape grid receives a small floor plus
+    cell-level exact accuracy. This gives GRPO relative signal before any rollout fully solves a
+    hard query, while the configured weight keeps exact correctness dominant.
+    """
+    rewards: list[float] = []
+    shape_matches = 0
+    for completion, truth_text in zip(completions, ground_truth):
+        predicted = parse_grid(_completion_text(completion))
+        truth = json.loads(truth_text)
+        if predicted is None or not _same_shape(predicted, truth):
+            rewards.append(0.0)
+            continue
+        shape_matches += 1
+        cell_accuracy = _cell_accuracy(predicted, truth)
+        rewards.append(_SHAPE_FLOOR + (1.0 - _SHAPE_FLOOR) * cell_accuracy)
+
+    if log_metric and rewards:
+        log_metric("arc_progress", sum(rewards) / len(rewards))
+        log_metric("arc_shape_match", shape_matches / len(rewards))
+    return rewards
+
+
+def answer_format_reward(completions, log_metric=None, **kwargs) -> list[float]:
+    """Tiny format reward for an explicit, parseable <answer>...</answer> ARC grid."""
+    rewards: list[float] = []
+    for completion in completions:
+        text = _completion_text(completion)
+        explicit = bool(ANSWER_RE.search(text))
+        rewards.append(float(explicit and parse_grid(text) is not None))
+    if log_metric and rewards:
+        log_metric("arc_answer_format", sum(rewards) / len(rewards))
     return rewards
