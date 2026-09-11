@@ -8,7 +8,7 @@ A clean, scalable training and validation pipeline for the ARC Prize 2026 ARC-AG
 - **Adaptation:** LoRA + GRPO; no labelled chain-of-thought is required.
 - **Training:** 1,000 official training tasks only.
 - **Dynamic augmentation:** every known pair can be the query; every valid shot count is covered; support examples and order are re-sampled on the fly.
-- **Reward:** binary exact final-grid match.
+- **Reward:** binary exact final-grid match; reward-sparsity diagnostics are logged.
 - **Validation:** fixed 120 official evaluation tasks, evaluated at cumulative prefixes `A`, `A+B`, `A+B+C`, ... against the original test query(s).
 - **Checkpoint metric:** task-macro shot-efficiency score.
 - **Competition diagnostic:** full-shot two-attempt exact-match accuracy.
@@ -31,6 +31,7 @@ ARC-AGI-2/
 │   ├── inspect_data.py
 │   ├── metrics.py
 │   ├── parsing.py
+│   ├── preflight.py
 │   ├── prompts.py
 │   ├── rewards.py
 │   ├── train.py
@@ -61,13 +62,23 @@ For W&B logging:
 pip install -e '.[wandb]'
 ```
 
-## Dataset check
+## Audit before training
 
-The loader accepts either the Kaggle ZIP directly or an extracted directory:
+The dataset checker reports split statistics, train/evaluation leakage checks, local-test duplication, and augmentation weighting:
 
 ```bash
 arc-stats --data /path/to/arc-prize-2026-arc-agi-2.zip
 ```
+
+Then run the model/runtime preflight. It loads the Qwen tokenizer/config but not the 8B weights, checks the installed TRL API, measures the longest ARC prompts, verifies prompt + completion fits the model context, and reports expected rollout counts:
+
+```bash
+arc-preflight \
+  --config configs/qwen3_8b_grpo_lora.yaml \
+  --data /path/to/arc-prize-2026-arc-agi-2.zip
+```
+
+For the supplied competition ZIP, the audited experiment contains **15,350** target×shot training episode specifications per logical cycle and **523** fixed validation query×shot cases.
 
 ## Train
 
@@ -79,7 +90,9 @@ accelerate launch -m arcagi2.train \
   --data /path/to/arc-prize-2026-arc-agi-2.zip
 ```
 
-The config exposes LoRA, GRPO group size, optimizer, generation, checkpointing, and optional vLLM settings.
+The config exposes LoRA, GRPO group size, optimizer, generation, checkpointing, and optional vLLM settings. The episode stream already shuffles each logical cycle, so TRL's extra iterable-dataset shuffle is disabled to preserve complete target×shot coverage.
+
+GRPO logs `arc_exact_grid`, `arc_parseable`, `arc_group_all_wrong`, `arc_group_all_correct`, and `arc_group_mixed`. If almost every group is all-wrong, exact-match-only GRPO is receiving little relative learning signal and the next experiment should address reward sparsity rather than silently continuing a long run.
 
 ## Validate
 
@@ -108,4 +121,4 @@ The validator writes a JSON report containing the overall shot-efficiency score,
 pytest -q
 ```
 
-The unit tests exercise augmentation coverage, answer parsing, candidate voting, and the shot-efficiency aggregation without loading Qwen3-8B.
+The lightweight tests exercise augmentation coverage, answer parsing, candidate voting, exact-grid reward diagnostics, and the shot-efficiency aggregation without loading Qwen3-8B.
