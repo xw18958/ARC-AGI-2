@@ -27,6 +27,7 @@ dev = ["pytest>=8", "ruff>=0.9"]
 arc-train = "arcagi2.train:main"
 arc-validate = "arcagi2.validate:main"
 arc-stats = "arcagi2.inspect_data:main"
+arc-preflight = "arcagi2.preflight:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
