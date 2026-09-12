@@ -8,54 +8,22 @@ from importlib.metadata import version
 from .config import load_config
 from .data import load_bundle
 from .episodes import build_episode_specs, validation_cases
-from .prompts import build_messages
+from .prompts import build_messages, load_reasoning_method
 from .train import _warmup_kwargs
 
 _REQUIRED_GRPO_FIELDS = {
-    "output_dir",
-    "max_steps",
-    "per_device_train_batch_size",
-    "gradient_accumulation_steps",
-    "learning_rate",
-    "weight_decay",
-    "max_grad_norm",
-    "bf16",
-    "gradient_checkpointing",
-    "logging_steps",
-    "save_steps",
-    "save_total_limit",
-    "report_to",
-    "seed",
-    "remove_unused_columns",
-    "trust_remote_code",
-    "num_generations",
-    "max_completion_length",
-    "temperature",
-    "top_p",
-    "top_k",
-    "min_p",
-    "beta",
-    "loss_type",
-    "scale_rewards",
-    "shuffle_dataset",
-    "chat_template_kwargs",
-    "reward_weights",
-    "mask_truncated_completions",
-    "log_completions",
-    "num_completions_to_print",
-    "use_vllm",
-    "vllm_mode",
+    "output_dir", "max_steps", "per_device_train_batch_size", "gradient_accumulation_steps",
+    "learning_rate", "weight_decay", "max_grad_norm", "bf16", "gradient_checkpointing",
+    "logging_steps", "save_steps", "save_total_limit", "report_to", "seed",
+    "remove_unused_columns", "trust_remote_code", "num_generations", "max_completion_length",
+    "temperature", "top_p", "top_k", "min_p", "beta", "loss_type", "scale_rewards",
+    "shuffle_dataset", "chat_template_kwargs", "reward_weights", "mask_truncated_completions",
+    "log_completions", "num_completions_to_print", "use_vllm", "vllm_mode",
     "vllm_gpu_memory_utilization",
 }
 
 
 def _token_count(tokenized) -> int:
-    """Count one rendered prompt across tokenizer return types.
-
-    Recent Transformers releases return a ``BatchEncoding`` from
-    ``apply_chat_template`` even for one unbatched conversation. Counting that
-    mapping directly reports its number of fields instead of its tokens.
-    """
     input_ids = tokenized.get("input_ids") if isinstance(tokenized, Mapping) else tokenized
     shape = getattr(input_ids, "shape", None)
     if shape is not None:
@@ -67,15 +35,16 @@ def _token_count(tokenized) -> int:
     return len(input_ids)
 
 
-def _full_shot_training_prompts(tasks):
-    """Yield the longest support condition for every possible training target."""
+def _full_shot_training_prompts(tasks, *, prompt_method: str = "v1"):
     for task in tasks.values():
         pairs = task.known_pairs
         if len(pairs) < 2:
             continue
         for target_index, target in enumerate(pairs):
             supports = [pair for i, pair in enumerate(pairs) if i != target_index]
-            yield task.task_id, build_messages(supports, target.input)
+            yield task.task_id, build_messages(
+                supports, target.input, prompt_method=prompt_method
+            )
 
 
 def _max_prompt_tokens(tokenizer, prompts, *, enable_thinking: bool):
@@ -84,10 +53,7 @@ def _max_prompt_tokens(tokenizer, prompts, *, enable_thinking: bool):
     count = 0
     for task_id, messages in prompts:
         token_ids = tokenizer.apply_chat_template(
-            messages,
-            tokenize=True,
-            add_generation_prompt=True,
-            enable_thinking=enable_thinking,
+            messages, tokenize=True, add_generation_prompt=True, enable_thinking=enable_thinking
         )
         length = _token_count(token_ids)
         count += 1
@@ -105,6 +71,9 @@ def main() -> None:
 
     cfg = load_config(args.config)
     bundle = load_bundle(args.data)
+    prompt_method = cfg.get("prompt", {}).get("method", "v1")
+    # Fail fast on a typo and expose the exact selected asset in the report.
+    prompt_text = load_reasoning_method(prompt_method)
 
     from transformers import AutoConfig, AutoTokenizer
     from trl import GRPOConfig
@@ -117,9 +86,7 @@ def main() -> None:
 
     rewards = cfg["rewards"]
     reward_weights = [
-        float(rewards["exact_weight"]),
-        float(rewards["progress_weight"]),
-        float(rewards["format_weight"]),
+        float(rewards["exact_weight"]), float(rewards["progress_weight"]), float(rewards["format_weight"])
     ]
     if reward_weights[0] <= sum(max(0.0, w) for w in reward_weights[1:]):
         raise RuntimeError("Exact reward is not dominant over auxiliary shaping rewards")
@@ -133,10 +100,10 @@ def main() -> None:
 
     train_prompt_stats = _max_prompt_tokens(
         tokenizer,
-        _full_shot_training_prompts(bundle.train),
+        _full_shot_training_prompts(bundle.train, prompt_method=prompt_method),
         enable_thinking=enable_thinking,
     )
-    val_cases = validation_cases(bundle.evaluation)
+    val_cases = validation_cases(bundle.evaluation, prompt_method=prompt_method)
     val_prompt_stats = _max_prompt_tokens(
         tokenizer,
         ((case["task_id"], case["prompt"]) for case in val_cases),
@@ -159,18 +126,11 @@ def main() -> None:
             name: version(name)
             for name in ("torch", "transformers", "datasets", "trl", "peft", "accelerate")
         },
-        "model": {
-            "name": model_name,
-            "context_tokens": context,
-            "enable_thinking": enable_thinking,
-        },
+        "model": {"name": model_name, "context_tokens": context, "enable_thinking": enable_thinking},
+        "prompt": {"method": prompt_method, "characters": len(prompt_text)},
         "augmentation": cfg["augmentation"],
         "rewards": {
-            "weights": {
-                "exact": reward_weights[0],
-                "progress": reward_weights[1],
-                "format": reward_weights[2],
-            },
+            "weights": {"exact": reward_weights[0], "progress": reward_weights[1], "format": reward_weights[2]},
             "exact_is_dominant": True,
         },
         "training": {
@@ -178,9 +138,7 @@ def main() -> None:
             "rollouts_per_logical_cycle": logical_episodes * num_generations,
             "num_generations": num_generations,
             "max_completion_length": completion,
-            "mask_truncated_completions": bool(
-                cfg["grpo"].get("mask_truncated_completions", True)
-            ),
+            "mask_truncated_completions": bool(cfg["grpo"].get("mask_truncated_completions", True)),
             "max_full_shot_prompt": train_prompt_stats,
         },
         "validation": {
@@ -190,10 +148,7 @@ def main() -> None:
             "max_prompt": val_prompt_stats,
         },
         "context_margin_tokens": context - longest_prompt - completion if context else None,
-        "grpo_api_check": {
-            "status": "ok",
-            "warmup_argument": next(iter(warmup_kwargs)),
-        },
+        "grpo_api_check": {"status": "ok", "warmup_argument": next(iter(warmup_kwargs))},
     }
     print(json.dumps(report, indent=2))
 
