@@ -40,10 +40,16 @@ def sample_supports(
     return [pairs[i] for i in support_indices], target
 
 
-def make_episode_row(task: ArcTask, spec: EpisodeSpec, rng: random.Random) -> dict:
+def make_episode_row(
+    task: ArcTask,
+    spec: EpisodeSpec,
+    rng: random.Random,
+    *,
+    prompt_method: str = "v1",
+) -> dict:
     supports, target = sample_supports(task, spec, rng)
     return {
-        "prompt": build_messages(supports, target.input),
+        "prompt": build_messages(supports, target.input, prompt_method=prompt_method),
         "ground_truth": canonical_grid(target.output),
         "task_id": spec.task_id,
         "shot_count": spec.shot_count,
@@ -65,9 +71,6 @@ def _ordered_specs_for_cycle(
     if curriculum != "high_to_low_evidence":
         raise ValueError(f"Unknown shot curriculum: {curriculum}")
 
-    # More demonstrations for the same task provide more evidence. Sort by the fraction of the
-    # available supports being shown, while retaining random order inside equal-evidence bands.
-    # The stable sort preserves the preceding random shuffle for ties.
     def evidence_fraction(spec: EpisodeSpec) -> float:
         max_shots = len(tasks[spec.task_id].known_pairs) - 1
         return spec.shot_count / max_shots
@@ -81,6 +84,7 @@ def training_row_stream(
     seed: int = 42,
     curriculum: str = "high_to_low_evidence",
     curriculum_cycles: int = 1,
+    prompt_method: str = "v1",
 ) -> Iterator[dict]:
     """Infinite on-the-fly augmentation stream.
 
@@ -98,7 +102,9 @@ def training_row_stream(
         order = _ordered_specs_for_cycle(tasks, specs, cycle_rng, curriculum=cycle_curriculum)
         for index, spec in enumerate(order):
             row_rng = random.Random(seed + cycle * 1_000_003 + index * 9_176 + 17)
-            yield make_episode_row(tasks[spec.task_id], spec, row_rng)
+            yield make_episode_row(
+                tasks[spec.task_id], spec, row_rng, prompt_method=prompt_method
+            )
         cycle += 1
 
 
@@ -106,7 +112,7 @@ def episode_count(tasks: dict[str, ArcTask]) -> int:
     return len(build_episode_specs(tasks))
 
 
-def validation_cases(tasks: dict[str, ArcTask]) -> list[dict]:
+def validation_cases(tasks: dict[str, ArcTask], *, prompt_method: str = "v1") -> list[dict]:
     """Fixed cumulative-prefix validation: A, A+B, A+B+C, ... -> original test query."""
     cases: list[dict] = []
     for task_id, task in tasks.items():
@@ -121,7 +127,9 @@ def validation_cases(tasks: dict[str, ArcTask]) -> list[dict]:
                         "shot_count": shot_count,
                         "max_shots": len(task.train_pairs),
                         "query_index": query_index,
-                        "prompt": build_messages(supports, query),
+                        "prompt": build_messages(
+                            supports, query, prompt_method=prompt_method
+                        ),
                         "ground_truth": canonical_grid(target),
                     }
                 )
