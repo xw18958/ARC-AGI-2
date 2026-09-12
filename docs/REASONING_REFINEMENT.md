@@ -4,9 +4,19 @@
 
 Train Qwen3-8B to discover better ARC reasoning trajectories without a teacher chain-of-thought dataset. Qwen generates its own `<think>...</think>` trajectory; GRPO assigns an advantage to the **whole generated sequence** from verifiable properties of the final grid.
 
-Each prompt includes the packaged `student_universal_method.md` procedure. It supplies reusable operations such as structural parsing, role normalization, candidate-rule verification, and exact-grid self-checking. It contains no task-specific solution trace or labelled chain of thought; Qwen still generates the trajectory that GRPO evaluates.
+The prompt is selectable. `v1` preserves the original empirically derived `student_universal_method.md`. `v2` uses `student_universal_method_v2.md`: a compact controller that explicitly treats color IDs as categorical symbols, tests simple substitution early, stops after a rule explains every demonstration, and retains the same specialized ARC method families in compressed trigger-based form. Neither prompt contains a task-specific solution trace or labelled chain of thought; Qwen still generates the trajectory that GRPO evaluates.
 
 The design intentionally does **not** reward reasoning length, particular phrases, or a hand-written explanation. Those signals are easy to game and are not guaranteed to correspond to correct ARC reasoning.
+
+## Prompt termination gate
+
+The first real Qwen smoke probe exposed a pre-answer failure: all eight sampled trajectories hit the 4,096-token completion limit inside `<think>`, so none reached `<answer>` and truncation masking correctly removed all reward signal. The traces repeatedly interpreted ARC color IDs arithmetically and revisited rejected hypotheses.
+
+V2 targets that observed behavior directly. Before changing GRPO or guessing a longer completion cap, compare V1 and V2 under identical generation settings on a frozen set of **training** tasks. Measure answer-reached rate, parseability, exact correctness, termination length, truncation rate, reward variation, runtime, and repeated-hypothesis loops. See `docs/PROMPT_AB_TEST_PLAN.md` for the controlled protocol.
+
+Do not select a future completion cap from a round number by intuition. If V2 still truncates materially, run a separate diagnostic study that observes natural termination lengths and derive a cap from the empirical distribution. If trajectories merely continue looping at a larger diagnostic ceiling, treat that as a reasoning-loop problem rather than evidence that the training cap should be increased.
+
+Do not start the five-step GRPO smoke run until the selected prompt produces enough completed, parseable answers for reward groups to have a realistic chance of non-identical rewards.
 
 ## Reward design
 
