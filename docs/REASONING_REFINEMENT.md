@@ -18,6 +18,8 @@ Do not select a future completion cap from a round number by intuition. If V2 st
 
 Do not start the five-step GRPO smoke run until the selected prompt produces enough completed, parseable answers for reward groups to have a realistic chance of non-identical rewards.
 
+The controlled evidence is archived under `outputs/smoke_evidence/20260912_170956_prompt_v2/`. On the exact prior regression case, both V1 and V2 reached the exact answer in 1/8 generations and truncated 7/8 generations at the 4,096-token cap; the total generation time was 223.2 seconds for V1 and 214.2 seconds for V2. The accompanying multitask files are exploratory and asymmetric (V1: 8 prompts/64 generations; V2: 1 prompt/8 generations), so they do not establish a balanced multitask comparison.
+
 ## Reward design
 
 Three verifiable reward functions are combined:

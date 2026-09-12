@@ -1,0 +1,26 @@
+{
+  "seed": 42,
+  "source_split": "official_train_only",
+  "selection_rule": "Exact reproduction of prior controlled probe",
+  "num_cases": 1,
+  "cases": [
+    {
+      "task_id": "0d3d703e",
+      "target_index": 0,
+      "shot_count": 4,
+      "support_indices": [
+        3,
+        2,
+        1,
+        4
+      ],
+      "support_order": [
+        3,
+        2,
+        1,
+        4
+      ],
+      "seed": 42
+    }
+  ]
+}

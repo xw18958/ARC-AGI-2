@@ -1,0 +1,238 @@
+{
+  "seed": 42,
+  "selection_rule": "Deterministic official-training-only stratification by transformation family and shot band; six family\u00d7shot cells plus deterministic simple/richer two-shot cases; task ranking is SHA256(seed,slot,task_id).",
+  "source_split": "official_train_only",
+  "num_cases": 8,
+  "cases": [
+    {
+      "task_id": "c8f0f002",
+      "target_index": 3,
+      "shot_count": 1,
+      "support_indices": [
+        1
+      ],
+      "support_order": [
+        1
+      ],
+      "seed": 42,
+      "transform_category": "color_only",
+      "target_input_shape": [
+        3,
+        5
+      ],
+      "target_output_shape": [
+        3,
+        5
+      ],
+      "target_input_cells": 15,
+      "target_input_colors": 3,
+      "slot": "color_only_low",
+      "max_available_shots": 3,
+      "grid_size_band": "small"
+    },
+    {
+      "task_id": "0d3d703e",
+      "target_index": 3,
+      "shot_count": 4,
+      "support_indices": [
+        1,
+        4,
+        2,
+        0
+      ],
+      "support_order": [
+        1,
+        4,
+        2,
+        0
+      ],
+      "seed": 42,
+      "transform_category": "color_only",
+      "target_input_shape": [
+        3,
+        3
+      ],
+      "target_output_shape": [
+        3,
+        3
+      ],
+      "target_input_cells": 9,
+      "target_input_colors": 3,
+      "slot": "color_only_high",
+      "max_available_shots": 4,
+      "grid_size_band": "small"
+    },
+    {
+      "task_id": "1e5d6875",
+      "target_index": 2,
+      "shot_count": 1,
+      "support_indices": [
+        0
+      ],
+      "support_order": [
+        0
+      ],
+      "seed": 42,
+      "transform_category": "same_size_structural",
+      "target_input_shape": [
+        16,
+        16
+      ],
+      "target_output_shape": [
+        16,
+        16
+      ],
+      "target_input_cells": 256,
+      "target_input_colors": 3,
+      "slot": "same_size_structural_low",
+      "max_available_shots": 2,
+      "grid_size_band": "large"
+    },
+    {
+      "task_id": "a8610ef7",
+      "target_index": 0,
+      "shot_count": 4,
+      "support_indices": [
+        2,
+        4,
+        1,
+        3
+      ],
+      "support_order": [
+        2,
+        4,
+        1,
+        3
+      ],
+      "seed": 42,
+      "transform_category": "same_size_structural",
+      "target_input_shape": [
+        6,
+        6
+      ],
+      "target_output_shape": [
+        6,
+        6
+      ],
+      "target_input_cells": 36,
+      "target_input_colors": 2,
+      "slot": "same_size_structural_high",
+      "max_available_shots": 4,
+      "grid_size_band": "small"
+    },
+    {
+      "task_id": "e633a9e5",
+      "target_index": 3,
+      "shot_count": 1,
+      "support_indices": [
+        1
+      ],
+      "support_order": [
+        1
+      ],
+      "seed": 42,
+      "transform_category": "dimension_change",
+      "target_input_shape": [
+        3,
+        3
+      ],
+      "target_output_shape": [
+        5,
+        5
+      ],
+      "target_input_cells": 9,
+      "target_input_colors": 6,
+      "slot": "dimension_change_low",
+      "max_available_shots": 3,
+      "grid_size_band": "small"
+    },
+    {
+      "task_id": "d017b73f",
+      "target_index": 0,
+      "shot_count": 4,
+      "support_indices": [
+        4,
+        2,
+        1,
+        3
+      ],
+      "support_order": [
+        4,
+        2,
+        1,
+        3
+      ],
+      "seed": 42,
+      "transform_category": "dimension_change",
+      "target_input_shape": [
+        3,
+        11
+      ],
+      "target_output_shape": [
+        3,
+        9
+      ],
+      "target_input_cells": 33,
+      "target_input_colors": 4,
+      "slot": "dimension_change_high",
+      "max_available_shots": 4,
+      "grid_size_band": "small"
+    },
+    {
+      "task_id": "00576224",
+      "target_index": 0,
+      "shot_count": 2,
+      "support_indices": [
+        2,
+        1
+      ],
+      "support_order": [
+        2,
+        1
+      ],
+      "seed": 42,
+      "transform_category": "dimension_change",
+      "target_input_shape": [
+        2,
+        2
+      ],
+      "target_output_shape": [
+        6,
+        6
+      ],
+      "target_input_cells": 4,
+      "target_input_colors": 4,
+      "slot": "simple_two_shot",
+      "max_available_shots": 2,
+      "grid_size_band": "small"
+    },
+    {
+      "task_id": "8a371977",
+      "target_index": 0,
+      "shot_count": 2,
+      "support_indices": [
+        2,
+        3
+      ],
+      "support_order": [
+        2,
+        3
+      ],
+      "seed": 42,
+      "transform_category": "same_size_structural",
+      "target_input_shape": [
+        23,
+        23
+      ],
+      "target_output_shape": [
+        23,
+        23
+      ],
+      "target_input_cells": 529,
+      "target_input_colors": 2,
+      "slot": "richer_two_shot",
+      "max_available_shots": 3,
+      "grid_size_band": "large"
+    }
+  ]
+}
