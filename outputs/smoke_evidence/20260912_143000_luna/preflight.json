@@ -1,0 +1,54 @@
+{
+  "versions": {
+    "torch": "2.11.0+cu128",
+    "transformers": "5.17.0",
+    "datasets": "5.0.1",
+    "trl": "1.13.0",
+    "peft": "0.20.0",
+    "accelerate": "1.5.1"
+  },
+  "model": {
+    "name": "/raid1/xwan0900/models/Qwen3-8B",
+    "context_tokens": 40960,
+    "enable_thinking": true
+  },
+  "augmentation": {
+    "shot_curriculum": "high_to_low_evidence",
+    "curriculum_cycles": 1
+  },
+  "rewards": {
+    "weights": {
+      "exact": 1.0,
+      "progress": 0.2,
+      "format": 0.02
+    },
+    "exact_is_dominant": true
+  },
+  "training": {
+    "logical_episode_specs": 15350,
+    "rollouts_per_logical_cycle": 122800,
+    "num_generations": 8,
+    "max_completion_length": 4096,
+    "mask_truncated_completions": true,
+    "max_full_shot_prompt": {
+      "count": 4308,
+      "max_tokens": 17877,
+      "max_task_id": "b74ca5d1"
+    }
+  },
+  "validation": {
+    "cases": 523,
+    "candidate_generations_per_run": 1046,
+    "num_candidates": 2,
+    "max_prompt": {
+      "count": 523,
+      "max_tokens": 17877,
+      "max_task_id": "981571dc"
+    }
+  },
+  "context_margin_tokens": 18987,
+  "grpo_api_check": {
+    "status": "ok",
+    "warmup_argument": "warmup_steps"
+  }
+}

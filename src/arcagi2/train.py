@@ -10,6 +10,16 @@ from .episodes import episode_count, training_row_stream
 from .rewards import answer_format_reward, exact_grid_reward, grid_progress_reward
 
 
+def _warmup_kwargs(grpo_fields: set[str], warmup_ratio: float) -> dict[str, float]:
+    """Preserve ratio-based warmup across Transformers TrainingArguments APIs."""
+    if "warmup_ratio" in grpo_fields:
+        return {"warmup_ratio": warmup_ratio}
+    if "warmup_steps" in grpo_fields:
+        # Transformers 5 accepts a float in [0, 1) here as a ratio.
+        return {"warmup_steps": warmup_ratio}
+    raise RuntimeError("Installed GRPOConfig supports neither warmup_ratio nor warmup_steps")
+
+
 def _make_dataset(tasks, seed: int, augmentation_cfg: dict):
     from datasets import IterableDataset
 
@@ -39,6 +49,8 @@ def main() -> None:
 
     from peft import LoraConfig
     from trl import GRPOConfig, GRPOTrainer
+
+    grpo_fields = set(GRPOConfig.__dataclass_fields__)
 
     lora_cfg = cfg["lora"]
     peft_config = LoraConfig(
@@ -93,7 +105,6 @@ def main() -> None:
         per_device_train_batch_size=int(t["per_device_train_batch_size"]),
         gradient_accumulation_steps=int(t["gradient_accumulation_steps"]),
         learning_rate=float(t["learning_rate"]),
-        warmup_ratio=float(t.get("warmup_ratio", 0.0)),
         weight_decay=float(t.get("weight_decay", 0.0)),
         max_grad_norm=float(t.get("max_grad_norm", 1.0)),
         bf16=bool(t.get("bf16", True)),
@@ -123,6 +134,7 @@ def main() -> None:
         use_vllm=bool(v.get("enabled", False)),
         vllm_mode=v.get("mode", "colocate"),
         vllm_gpu_memory_utilization=float(v.get("gpu_memory_utilization", 0.3)),
+        **_warmup_kwargs(grpo_fields, float(t.get("warmup_ratio", 0.0))),
     )
 
     trainer = GRPOTrainer(

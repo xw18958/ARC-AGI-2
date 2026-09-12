@@ -4,6 +4,8 @@
 
 Train Qwen3-8B to discover better ARC reasoning trajectories without a teacher chain-of-thought dataset. Qwen generates its own `<think>...</think>` trajectory; GRPO assigns an advantage to the **whole generated sequence** from verifiable properties of the final grid.
 
+Each prompt includes the packaged `student_universal_method.md` procedure. It supplies reusable operations such as structural parsing, role normalization, candidate-rule verification, and exact-grid self-checking. It contains no task-specific solution trace or labelled chain of thought; Qwen still generates the trajectory that GRPO evaluates.
+
 The design intentionally does **not** reward reasoning length, particular phrases, or a hand-written explanation. Those signals are easy to game and are not guaranteed to correspond to correct ARC reasoning.
 
 ## Reward design

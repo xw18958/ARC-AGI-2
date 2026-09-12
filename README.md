@@ -9,6 +9,7 @@ A clean, scalable training and validation pipeline for the ARC Prize 2026 ARC-AG
 - **Training:** 1,000 official training tasks only.
 - **Dynamic augmentation:** every known pair can be the query; every valid shot count is covered; support examples and order are re-sampled on the fly.
 - **Reasoning refinement:** exact-grid reward remains dominant, with small verifiable grid-progress and strict-format rewards to reduce sparse-reward dead zones.
+- **Reusable reasoning prompt:** every episode includes the packaged student universal ARC method in `src/arcagi2/prompt_assets/student_universal_method.md`.
 - **Evidence curriculum:** the initial logical cycle can present high-evidence shot conditions before low-evidence conditions without changing target×shot coverage.
 - **Validation:** fixed 120 official evaluation tasks at cumulative prefixes `A`, `A+B`, `A+B+C`, ... against the original test query(s).
 - **Checkpoint metric:** task-macro shot-efficiency score.

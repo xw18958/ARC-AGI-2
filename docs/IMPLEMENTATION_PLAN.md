@@ -32,6 +32,7 @@ This is **not** an assumption that tasks with more demonstrations are easier. It
 Each episode contains:
 
 - a system instruction defining ARC grid rules and strict output format;
+- the packaged student universal ARC procedure, providing reusable structural checks and candidate transformations without task-specific answers;
 - `k` solved input-output demonstrations;
 - one query grid whose output is hidden from the model.
 

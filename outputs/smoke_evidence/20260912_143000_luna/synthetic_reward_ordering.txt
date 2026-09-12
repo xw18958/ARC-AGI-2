@@ -1,0 +1,31 @@
+{
+  "exact": [
+    1.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "progress": [
+    1.0,
+    0.8125,
+    0.0,
+    0.0
+  ],
+  "format": [
+    1.0,
+    1.0,
+    1.0,
+    0.0
+  ],
+  "weighted": [
+    1.22,
+    0.1825,
+    0.02,
+    0.0
+  ],
+  "ordering_checks": {
+    "exact_beats_aux_wrong": true,
+    "same_shape_beats_wrong_shape": true,
+    "truncated_zero": true
+  }
+}

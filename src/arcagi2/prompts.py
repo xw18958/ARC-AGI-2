@@ -1,10 +1,22 @@
 from __future__ import annotations
 
 import json
+from importlib.resources import files
 
 from .types import Grid, Pair
 
-SYSTEM_PROMPT = """You solve ARC-AGI-2 abstract grid reasoning tasks. Infer a single transformation rule that is consistent with every provided demonstration. Think carefully before answering. After reasoning, return exactly one final grid inside <answer>...</answer>. The answer must be a JSON list of equally sized rows containing only integers 0 through 9."""
+STUDENT_UNIVERSAL_METHOD = (
+    files("arcagi2")
+    .joinpath("prompt_assets/student_universal_method.md")
+    .read_text(encoding="utf-8")
+    .strip()
+)
+
+SYSTEM_PROMPT = f"""You solve ARC-AGI-2 abstract grid reasoning tasks. Infer a single transformation rule that is consistent with every provided demonstration. Think carefully before answering. After reasoning, return exactly one final grid inside <answer>...</answer>. The answer must be a JSON list of equally sized rows containing only integers 0 through 9.
+
+Use the following reusable reasoning procedure when solving the task:
+
+{STUDENT_UNIVERSAL_METHOD}"""
 
 
 def grid_to_text(grid: Grid) -> str:

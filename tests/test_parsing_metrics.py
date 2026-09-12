@@ -7,6 +7,21 @@ def test_parse_answer_block_after_reasoning():
     assert parse_grid(text) == [[1, 0], [0, 1]]
 
 
+def test_truncated_thinking_does_not_parse_mentioned_grid():
+    text = "<think>I am still comparing the demonstration [[1,0],[0,1]]"
+    assert parse_grid(text) is None
+
+
+def test_malformed_explicit_answer_does_not_fall_back_to_reasoning_grid():
+    text = "<think>I saw [[9]].</think><answer>not a grid</answer>"
+    assert parse_grid(text) is None
+
+
+def test_bare_grid_after_completed_thinking_remains_supported():
+    text = "<think>done</think>[[1,0],[0,1]]"
+    assert parse_grid(text) == [[1, 0], [0, 1]]
+
+
 def test_candidate_voting_returns_distinct_top_two():
     candidates = [
         "<answer>[[1]]</answer>",

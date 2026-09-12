@@ -32,6 +32,9 @@ arc-preflight = "arcagi2.preflight:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+arcagi2 = ["prompt_assets/*.md"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

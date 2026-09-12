@@ -2,23 +2,69 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Mapping
 from importlib.metadata import version
 
 from .config import load_config
 from .data import load_bundle
 from .episodes import build_episode_specs, validation_cases
 from .prompts import build_messages
-
+from .train import _warmup_kwargs
 
 _REQUIRED_GRPO_FIELDS = {
+    "output_dir",
+    "max_steps",
+    "per_device_train_batch_size",
+    "gradient_accumulation_steps",
+    "learning_rate",
+    "weight_decay",
+    "max_grad_norm",
+    "bf16",
+    "gradient_checkpointing",
+    "logging_steps",
+    "save_steps",
+    "save_total_limit",
+    "report_to",
+    "seed",
+    "remove_unused_columns",
+    "trust_remote_code",
     "num_generations",
     "max_completion_length",
+    "temperature",
+    "top_p",
+    "top_k",
+    "min_p",
+    "beta",
+    "loss_type",
     "scale_rewards",
     "shuffle_dataset",
     "chat_template_kwargs",
     "reward_weights",
     "mask_truncated_completions",
+    "log_completions",
+    "num_completions_to_print",
+    "use_vllm",
+    "vllm_mode",
+    "vllm_gpu_memory_utilization",
 }
+
+
+def _token_count(tokenized) -> int:
+    """Count one rendered prompt across tokenizer return types.
+
+    Recent Transformers releases return a ``BatchEncoding`` from
+    ``apply_chat_template`` even for one unbatched conversation. Counting that
+    mapping directly reports its number of fields instead of its tokens.
+    """
+    input_ids = tokenized.get("input_ids") if isinstance(tokenized, Mapping) else tokenized
+    shape = getattr(input_ids, "shape", None)
+    if shape is not None:
+        return int(shape[-1])
+    if input_ids and isinstance(input_ids[0], (list, tuple)):
+        if len(input_ids) != 1:
+            raise ValueError("Expected one tokenized prompt")
+        input_ids = input_ids[0]
+    return len(input_ids)
 
 
 def _full_shot_training_prompts(tasks):
@@ -43,7 +89,7 @@ def _max_prompt_tokens(tokenizer, prompts, *, enable_thinking: bool):
             add_generation_prompt=True,
             enable_thinking=enable_thinking,
         )
-        length = len(token_ids)
+        length = _token_count(token_ids)
         count += 1
         if length > maximum:
             maximum = length
@@ -67,6 +113,7 @@ def main() -> None:
     missing = sorted(_REQUIRED_GRPO_FIELDS - grpo_fields)
     if missing:
         raise RuntimeError(f"Installed TRL GRPOConfig is missing required fields: {missing}")
+    warmup_kwargs = _warmup_kwargs(grpo_fields, float(cfg["training"].get("warmup_ratio", 0.0)))
 
     rewards = cfg["rewards"]
     reward_weights = [
@@ -143,7 +190,10 @@ def main() -> None:
             "max_prompt": val_prompt_stats,
         },
         "context_margin_tokens": context - longest_prompt - completion if context else None,
-        "grpo_api_check": "ok",
+        "grpo_api_check": {
+            "status": "ok",
+            "warmup_argument": next(iter(warmup_kwargs)),
+        },
     }
     print(json.dumps(report, indent=2))
 

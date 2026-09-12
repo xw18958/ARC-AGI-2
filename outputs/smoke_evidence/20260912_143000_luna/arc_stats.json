@@ -1,0 +1,92 @@
+{
+  "train": {
+    "tasks": 1000,
+    "demonstration_pairs": 3232,
+    "test_queries": 1076,
+    "shot_distribution": {
+      "2": 158,
+      "3": 575,
+      "4": 189,
+      "5": 49,
+      "6": 18,
+      "7": 8,
+      "8": 2,
+      "10": 1
+    },
+    "test_query_distribution": {
+      "1": 931,
+      "2": 63,
+      "3": 5,
+      "4": 1
+    },
+    "median_grid_cells": 100.0,
+    "median_grid_colors": 3.0
+  },
+  "evaluation": {
+    "tasks": 120,
+    "demonstration_pairs": 358,
+    "test_queries": 172,
+    "shot_distribution": {
+      "2": 34,
+      "3": 62,
+      "4": 17,
+      "5": 6,
+      "6": 1
+    },
+    "test_query_distribution": {
+      "1": 71,
+      "2": 46,
+      "3": 3
+    },
+    "median_grid_cells": 272.0,
+    "median_grid_colors": 5.0
+  },
+  "local_test": {
+    "tasks": 240,
+    "demonstration_pairs": 767,
+    "test_queries": 259,
+    "shot_distribution": {
+      "2": 45,
+      "3": 132,
+      "4": 43,
+      "5": 14,
+      "6": 4,
+      "7": 1,
+      "8": 1
+    },
+    "test_query_distribution": {
+      "1": 223,
+      "2": 15,
+      "3": 2
+    },
+    "median_grid_cells": 100.0,
+    "median_grid_colors": 3.0
+  },
+  "overlap_audit": {
+    "train_eval_task_id_overlap": 0,
+    "train_eval_exact_challenge_overlap": 0,
+    "train_eval_exact_labelled_pair_overlap": 0,
+    "local_test_task_ids_also_in_train": 240,
+    "local_test_exact_challenges_also_in_train": 240
+  },
+  "augmentation_audit": {
+    "known_pair_count_distribution": {
+      "3": 152,
+      "4": 553,
+      "5": 200,
+      "6": 56,
+      "7": 23,
+      "8": 7,
+      "9": 6,
+      "10": 1,
+      "11": 1,
+      "12": 1
+    },
+    "episode_specs_total": 15350,
+    "episode_specs_per_task_min": 6,
+    "episode_specs_per_task_median": 12.0,
+    "episode_specs_per_task_max": 132
+  },
+  "training_augmented_episode_specs_per_logical_epoch": 15350,
+  "fixed_validation_query_shot_cases": 523
+}

@@ -49,16 +49,23 @@ def _balanced_arrays(text: str) -> list[str]:
 
 def parse_grid(text: str) -> Grid | None:
     """Extract a strict ARC grid, preferring the explicit <answer> block."""
-    candidates: list[str] = []
     matches = ANSWER_RE.findall(text)
-    for answer in matches:
-        candidates.extend(_balanced_arrays(answer))
-    if not candidates:
-        # Qwen's native thinking block may be followed by a bare final grid.
-        tail = text.rsplit("</think>", 1)[-1]
-        candidates.extend(_balanced_arrays(tail))
-    if not candidates:
-        candidates.extend(_balanced_arrays(text))
+    if matches:
+        # Once the model uses the explicit contract, never recover a different
+        # grid from its reasoning when the answer block itself is malformed.
+        candidates = [array for answer in matches for array in _balanced_arrays(answer)]
+    else:
+        lowered = text.lower()
+        if "<answer" in lowered:
+            return None
+        if "<think" in lowered:
+            # A completion truncated inside native thinking has no final answer.
+            # Mining demonstration/query grids from that reasoning would create
+            # spurious progress reward for a trajectory excluded from the loss.
+            if "</think>" not in lowered:
+                return None
+            text = re.split(r"</think>", text, flags=re.IGNORECASE)[-1]
+        candidates = _balanced_arrays(text)
 
     # Prefer the last valid array: reasoning may quote demonstration grids first.
     for candidate in reversed(candidates):

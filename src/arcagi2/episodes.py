@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import random
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Iterator
 
 from .parsing import canonical_grid
 from .prompts import build_messages

@@ -43,6 +43,12 @@ def test_progress_reward_is_dense_but_bounded():
     assert rewards[2:] == [0.0, 0.0]
 
 
+def test_truncated_thinking_cannot_earn_progress_from_mentioned_grids():
+    completion = "<think>Still reasoning from [[1,2],[3,4]]"
+    assert grid_progress_reward([completion], ["[[1,2],[3,4]]"]) == [0.0]
+    assert answer_format_reward([completion]) == [0.0]
+
+
 def test_format_reward_requires_explicit_answer_block():
     rewards = answer_format_reward(
         completions=[
