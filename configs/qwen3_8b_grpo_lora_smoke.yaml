@@ -6,6 +6,9 @@ model:
   trust_remote_code: false
   enable_thinking: true
 
+prompt:
+  method: v2
+
 lora:
   r: 16
   alpha: 32
@@ -14,16 +17,12 @@ lora:
   bias: none
 
 augmentation:
-  # Every target x every valid shot count is still visited once per logical cycle.
-  # In the initial cycle(s), high-evidence (more-shot) episodes come first to reduce
-  # sparse-reward dead zones; support identities/order remain randomly augmented.
   shot_curriculum: high_to_low_evidence
   curriculum_cycles: 1
 
 training:
   output_dir: outputs/qwen3_8b_grpo_lora_smoke
   logical_epochs: 1
-  # Optional smoke-test override. Leave null to guarantee a complete logical cycle.
   max_steps_override: 5
   per_device_train_batch_size: 1
   gradient_accumulation_steps: 8
@@ -39,7 +38,6 @@ training:
   report_to: none
   resume_from_checkpoint: null
 
-# GRPO samples a group of reasoning traces for each prompt, then compares their rewards.
 grpo:
   num_generations: 8
   max_completion_length: 4096
@@ -49,25 +47,17 @@ grpo:
   min_p: 0.0
   beta: 0.0
   loss_type: dapo
-  # Do not train on cut-off reasoning trajectories that never reached a complete answer.
   mask_truncated_completions: true
-  # Avoid std-based question-difficulty reweighting.
   scale_rewards: false
-  # The episode stream already controls the curriculum/shuffle.
   shuffle_dataset: false
   log_completions: true
   num_completions_to_print: 8
 
-# Verifiable reward shaping. Exact correctness stays overwhelmingly dominant.
-# Maximum auxiliary contribution = 0.22, while exact correctness contributes 1.0.
-# Set progress_weight/format_weight to 0 for the exact-only ablation.
 rewards:
   exact_weight: 1.0
   progress_weight: 0.20
   format_weight: 0.02
 
-# Optional generation acceleration. For multi-GPU jobs, server mode can place rollout
-# generation on dedicated GPU(s); colocate mode shares the training GPU(s).
 vllm:
   enabled: false
   mode: colocate
@@ -81,5 +71,4 @@ validation:
   temperature: 0.6
   top_p: 0.95
   top_k: 20
-  # Validation remains unchanged by the training curriculum.
   fixed_prefix: true
