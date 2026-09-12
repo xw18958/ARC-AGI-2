@@ -15,15 +15,14 @@ def _warmup_kwargs(grpo_fields: set[str], warmup_ratio: float) -> dict[str, floa
     if "warmup_ratio" in grpo_fields:
         return {"warmup_ratio": warmup_ratio}
     if "warmup_steps" in grpo_fields:
-        # Transformers 5 accepts a float in [0, 1) here as a ratio.
         return {"warmup_steps": warmup_ratio}
     raise RuntimeError("Installed GRPOConfig supports neither warmup_ratio nor warmup_steps")
 
 
-def _make_dataset(tasks, seed: int, augmentation_cfg: dict):
+def _make_dataset(tasks, seed: int, augmentation_cfg: dict, prompt_cfg: dict | None = None):
     from datasets import IterableDataset
 
-    # Streaming keeps augmentation on-the-fly and avoids materializing support subsets.
+    prompt_method = (prompt_cfg or {}).get("method", "v1")
     return IterableDataset.from_generator(
         training_row_stream,
         gen_kwargs={
@@ -31,6 +30,7 @@ def _make_dataset(tasks, seed: int, augmentation_cfg: dict):
             "seed": seed,
             "curriculum": augmentation_cfg.get("shot_curriculum", "high_to_low_evidence"),
             "curriculum_cycles": int(augmentation_cfg.get("curriculum_cycles", 1)),
+            "prompt_method": prompt_method,
         },
     )
 
@@ -44,7 +44,7 @@ def main() -> None:
     cfg = load_config(args.config)
     bundle = load_bundle(args.data)
     seed = int(cfg.get("seed", 42))
-    train_dataset = _make_dataset(bundle.train, seed, cfg["augmentation"])
+    train_dataset = _make_dataset(bundle.train, seed, cfg["augmentation"], cfg.get("prompt"))
     logical_episodes = episode_count(bundle.train)
 
     from peft import LoraConfig
@@ -66,36 +66,24 @@ def main() -> None:
     g = cfg["grpo"]
     r = cfg["rewards"]
     world_size = int(os.environ.get("WORLD_SIZE", "1"))
-    per_device_effective_batch = (
-        int(t["per_device_train_batch_size"]) * int(t["gradient_accumulation_steps"])
-    )
+    per_device_effective_batch = int(t["per_device_train_batch_size"]) * int(t["gradient_accumulation_steps"])
     global_effective_batch = per_device_effective_batch * world_size
     num_generations = int(g["num_generations"])
     if global_effective_batch % num_generations != 0:
         raise ValueError(
-            "WORLD_SIZE * per_device_train_batch_size * gradient_accumulation_steps "
-            "must be divisible by num_generations."
+            "WORLD_SIZE * per_device_train_batch_size * gradient_accumulation_steps must be divisible by num_generations."
         )
 
-    # TRL repeats each unique prompt num_generations times inside the effective batch.
-    # Thus this is the number of unique ARC episode specifications consumed per optimizer step.
     prompts_per_optimizer_step = max(1, global_effective_batch // num_generations)
-    max_steps = math.ceil(
-        logical_episodes * int(t.get("logical_epochs", 1)) / prompts_per_optimizer_step
-    )
+    max_steps = math.ceil(logical_episodes * int(t.get("logical_epochs", 1)) / prompts_per_optimizer_step)
     if t.get("max_steps_override") is not None:
         max_steps = int(t["max_steps_override"])
 
     reward_funcs = [exact_grid_reward, grid_progress_reward, answer_format_reward]
-    reward_weights = [
-        float(r["exact_weight"]),
-        float(r["progress_weight"]),
-        float(r["format_weight"]),
-    ]
+    reward_weights = [float(r["exact_weight"]), float(r["progress_weight"]), float(r["format_weight"])]
     if reward_weights[0] <= sum(max(0.0, w) for w in reward_weights[1:]):
         raise ValueError(
-            "Exact correctness must remain dominant: exact_weight must exceed the sum of "
-            "all auxiliary reward weights."
+            "Exact correctness must remain dominant: exact_weight must exceed the sum of all auxiliary reward weights."
         )
 
     v = cfg.get("vllm", {})
